@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>awg-manager</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">awg-manager</p>
+          <h1>Current users</h1>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <span>Total</span>
+            <strong>{{ total_clients }}</strong>
+          </div>
+          <div class="stat">
+            <span>Email linked</span>
+            <strong>{{ linked_emails }}</strong>
+          </div>
+          <div class="stat">
+            <span>Server</span>
+            <strong>{{ selected_server_name }}</strong>
+          </div>
+        </div>
+      </header>
+
+      {% if error %}
+      <div class="banner banner-error">{{ error }}</div>
+      {% endif %}
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="messages">
+            {% for category, message in messages %}
+              <div class="banner banner-{{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      <main class="panel">
+        <section class="servers-panel">
+          <div class="panel-head compact">
+            <h2>Servers</h2>
+            <p>Add another server, switch the active one, or check availability.</p>
+          </div>
+
+          <form class="server-form" method="post" action="{{ url_for('add_server') }}">
+            <label class="field">
+              <span>Name</span>
+              <input type="text" name="name" placeholder="AWG Server">
+            </label>
+            <label class="field">
+              <span>Host</span>
+              <input type="text" name="host" placeholder="1.2.3.4" required>
+            </label>
+            <label class="field">
+              <span>Port</span>
+              <input type="number" name="port" value="22" min="1" max="65535" required>
+            </label>
+            <label class="field">
+              <span>Login</span>
+              <input type="text" name="login" placeholder="root" required>
+            </label>
+            <label class="field">
+              <span>Password</span>
+              <input type="password" name="password" placeholder="••••••••">
+            </label>
+            <button type="submit" class="save-btn">Add server</button>
+          </form>
+
+          <div class="server-list">
+            {% for server in servers %}
+            <article class="server-card {% if selected_server and server.id == selected_server_id %}active{% endif %}">
+              <div class="server-meta">
+                <strong>{{ server.name }}</strong>
+                <span>{{ server.login }}@{{ server.host }}:{{ server.port }}</span>
+              </div>
+              <div class="server-actions">
+                <a class="ghost-btn" href="{{ url_for('index', server_id=server.id) }}">Open</a>
+                <form method="post" action="{{ url_for('check_server', server_id=server.id) }}">
+                  <button type="submit" class="copy-btn">Check</button>
+                </form>
+                {% if not selected_server or server.id != selected_server_id %}
+                <form method="post" action="{{ url_for('activate_server', server_id=server.id) }}">
+                  <button type="submit" class="save-btn">Make active</button>
+                </form>
+                {% else %}
+                <span class="active-badge">Active</span>
+                {% endif %}
+                <form method="post" action="{{ url_for('delete_server', server_id=server.id) }}" onsubmit="return confirm('Delete server {{ server.name }}?');">
+                  <button type="submit" class="delete-btn">Delete</button>
+                </form>
+              </div>
+            </article>
+            {% endfor %}
+            {% if not servers %}
+            <div class="empty-state">No servers yet. Add the first one above.</div>
+            {% endif %}
+          </div>
+        </section>
+
+        {% if selected_server %}
+        <section class="mail-panel">
+          <div class="panel-head compact">
+            <h2>Email composer</h2>
+            <p>Edit the template, then send it only to users with both an email and a VPN key.</p>
+          </div>
+          <form class="mail-form" method="post" action="{{ url_for('send_mail_route', server_id=selected_server_id) }}">
+            <div class="mail-grid">
+              <div class="mail-editor">
+                <label class="field">
+                  <span>Subject template</span>
+                  <input type="text" name="subject_template" value="{{ mail_subject_template }}">
+                </label>
+                <label class="field">
+                  <span>Body template</span>
+                  <textarea name="body_template" rows="12">{{ mail_body_template }}</textarea>
+                </label>
+                <div class="template-hint">
+                  Placeholders: <code>{{ "{{ name }}" }}</code>, <code>{{ "{{ email }}" }}</code>,
+                  <code>{{ "{{ vpn_link }}" }}</code>, <code>{{ "{{ server_name }}" }}</code>
+                </div>
+              </div>
+
+              <div class="mail-recipients">
+                <div class="recipient-head">
+                  <label class="recipient-select-all">
+                    <input type="checkbox" id="select-all-recipients" checked>
+                    <strong>Recipients</strong>
+                  </label>
+                  <span>{{ eligible_mail_count }} available</span>
+                </div>
+                <div class="recipient-list">
+                  {% for item in mail_targets %}
+                  <label class="recipient-item">
+                    <input
+                      type="checkbox"
+                      name="recipient_ids"
+                      value="{{ item.client_id }}"
+                      checked
+                      data-email="{{ item.email_address }}"
+                      data-name="{{ item.name }}"
+                      data-vpn-link="{{ item.vpn_link }}"
+                    >
+                    <div class="recipient-meta">
+                      <strong>{{ item.name }}</strong>
+                      <span>{{ item.email_address }}</span>
+                    </div>
+                  </label>
+                  {% endfor %}
+                  {% if not eligible_mail_count %}
+                  <div class="empty-state">No sendable users yet.</div>
+                  {% endif %}
+                </div>
+                <div class="recipient-preview">
+                  <div class="recipient-head small">
+                    <strong>Will send to</strong>
+                  </div>
+                  <div id="mail-preview" class="preview-list"></div>
+                </div>
+                <div class="mail-actions">
+                  <button type="submit" class="save-btn">Send email</button>
+                  <a
+                    class="ghost-btn"
+                    href="https://resend.com/emails"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    View sent emails
+                  </a>
+                </div>
+              </div>
+            </div>
+          </form>
+        </section>
+
+        <section class="import-panel">
+          <div class="panel-head compact">
+            <h2>Import CSV</h2>
+            <p>Paste CSV text in the format <code>name,email</code> on each line.</p>
+          </div>
+          <form class="import-form" method="post" action="{{ url_for('import_csv', server_id=selected_server_id) }}">
+            <div class="import-stack">
+              <label class="import-label">
+                <span>CSV text</span>
+                <textarea name="csv_text" rows="5" placeholder="name,email&#10;alice,alice@example.com&#10;bob,bob@example.com"></textarea>
+              </label>
+            </div>
+            <button type="submit" class="save-btn">Import</button>
+          </form>
+        </section>
+
+        <div class="panel-head">
+          <h2>Server peers</h2>
+          <p>Each user has a VPN key and an email record stored in SQLite.</p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>IP</th>
+                <th>VPN key</th>
+                <th>Email</th>
+                <th>Save</th>
+                <th>Delete</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for client in clients %}
+              {% set email = client.raw.email if client.raw and client.raw.email else None %}
+              <tr>
+                <td>
+                  <div class="user-cell">
+                    <strong>{{ client.name }}</strong>
+                    <span>{{ client.client_id[:12] }}</span>
+                  </div>
+                  <form id="email-form-{{ loop.index }}" class="hidden-form" method="post" action="{{ url_for('save_email', server_id=selected_server_id, client_id=client.client_id) }}"></form>
+                </td>
+                <td><span class="chip">{{ client.ip }}</span></td>
+                <td>
+                  <div class="copy-field">
+                    <input id="vpn-{{ loop.index }}" type="text" readonly value="{{ client.vpn_link }}">
+                    <button type="button" class="copy-btn" data-copy="vpn-{{ loop.index }}">Copy</button>
+                  </div>
+                </td>
+                <td>
+                    <input form="email-form-{{ loop.index }}" type="email" name="email_address" placeholder="name@example.com" value="{{ email.email_address if email else '' }}" required>
+                </td>
+                <td>
+                    <button form="email-form-{{ loop.index }}" type="submit" class="save-btn">Save</button>
+                </td>
+                <td>
+                  <form method="post" action="{{ url_for('delete_client', server_id=selected_server_id, client_id=client.client_id) }}" onsubmit="return confirm('Delete {{ client.name }}?');">
+                    <button type="submit" class="delete-btn">Delete</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+              {% if not clients %}
+              <tr>
+                <td colspan="6" class="empty-state">No clients found.</td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty-state server-empty">
+          Add a server first. After that, the mail composer, import form, and client table will appear here.
+        </div>
+        {% endif %}
+      </main>
+    </div>
+
+    <script>
+      const escapeHtml = (value) =>
+        String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+
+      document.querySelectorAll("[data-copy]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const input = document.getElementById(button.dataset.copy);
+          if (!input) return;
+          await navigator.clipboard.writeText(input.value);
+          button.textContent = "Copied";
+          setTimeout(() => (button.textContent = "Copy"), 1000);
+        });
+      });
+
+      const preview = document.getElementById("mail-preview");
+      const recipientInputs = Array.from(document.querySelectorAll('input[name="recipient_ids"]'));
+      const selectAll = document.getElementById("select-all-recipients");
+
+      const syncPreview = () => {
+        if (!preview) return;
+        const recipients = recipientInputs
+          .filter((input) => input.checked && !input.disabled)
+          .map((input) => ({
+            name: input.dataset.name || "",
+            email: input.dataset.email || "",
+          }));
+
+        if (!recipients.length) {
+          preview.innerHTML = '<div class="preview-empty">No recipients selected.</div>';
+          return;
+        }
+
+        preview.innerHTML = recipients
+          .map(
+            (item) =>
+              `<div class="preview-chip">${escapeHtml(item.name)} <span>${escapeHtml(item.email)}</span></div>`,
+          )
+          .join("");
+      };
+
+      const syncSelectAll = () => {
+        if (!selectAll) return;
+        const enabled = recipientInputs.filter((input) => !input.disabled);
+        selectAll.checked = enabled.length > 0 && enabled.every((input) => input.checked);
+        selectAll.indeterminate = enabled.some((input) => input.checked) && !selectAll.checked;
+      };
+
+      if (selectAll) {
+        selectAll.addEventListener("change", () => {
+          recipientInputs.forEach((input) => {
+            if (!input.disabled) input.checked = selectAll.checked;
+          });
+          syncPreview();
+          syncSelectAll();
+        });
+      }
+
+      recipientInputs.forEach((input) => {
+        input.addEventListener("change", () => {
+          syncPreview();
+          syncSelectAll();
+        });
+      });
+      syncPreview();
+      syncSelectAll();
+    </script>
+  </body>
+</html>
