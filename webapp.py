@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import csv
+import hmac
 import os
 import sqlite3
 from contextlib import closing
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import StringIO
 
 from dotenv import load_dotenv
-from flask import Flask, flash, redirect, render_template, request, url_for
+from flask import Flask, flash, redirect, render_template, request, session, url_for
 
 from mail import DEFAULT_EMAIL_BODY_TEMPLATE, DEFAULT_EMAIL_SUBJECT_TEMPLATE, send_email
 from wg_manager import WGManager
@@ -18,6 +19,7 @@ load_dotenv()
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.getenv("DB_PATH", os.path.join(APP_DIR, "data", "wg_manager.sqlite3"))
 DEFAULT_SERVER_NAME = os.getenv("SERVER_NAME", "AWG Server")
+AUTH_PASSWORD = os.getenv("AUTH_PASSWORD", "")
 
 
 def now_iso() -> str:
@@ -384,11 +386,43 @@ def load_clients_with_mail(manager: WGManager, server: sqlite3.Row):
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "wg-manager-dev")
+app.config.update(
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=24),
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+)
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        if AUTH_PASSWORD and hmac.compare_digest(password, AUTH_PASSWORD):
+            session.clear()
+            session.permanent = True
+            session["authenticated"] = True
+            next_url = request.args.get("next") or request.form.get("next")
+            if not next_url or not next_url.startswith("/") or next_url.startswith("//"):
+                next_url = url_for("index")
+            return redirect(next_url)
+        return render_template("login.html", error="Invalid password."), 401
+
+    return render_template("login.html")
 
 
 @app.before_request
 def _ensure_db() -> None:
     init_db()
+
+
+@app.before_request
+def _require_authentication():
+    if request.endpoint == "login" or request.endpoint == "static":
+        return None
+    if session.get("authenticated") is not True:
+        next_url = request.full_path.rstrip("?")
+        return redirect(url_for("login", next=next_url))
+    return None
 
 
 def redirect_to_server(server_id: int | None) -> str:
