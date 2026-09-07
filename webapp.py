@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from io import StringIO
 
 from dotenv import load_dotenv
-from flask import Flask, flash, redirect, render_template, request, session, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from mail import DEFAULT_EMAIL_BODY_TEMPLATE, DEFAULT_EMAIL_SUBJECT_TEMPLATE, send_email
@@ -449,13 +449,6 @@ def index():
         error = f"Server {requested_server_id} not found."
     elif selected_server is None:
         error = "No servers configured. Add one below."
-    else:
-        try:
-            manager = make_manager(selected_server)
-            manager.connect()
-            clients, _, mail_targets = load_clients_with_mail(manager, selected_server)
-        except Exception as exc:
-            error = f"{selected_server['name']}: {exc}"
 
     return render_template(
         "index.html",
@@ -472,6 +465,42 @@ def index():
         mail_subject_template=DEFAULT_EMAIL_SUBJECT_TEMPLATE,
         mail_body_template=DEFAULT_EMAIL_BODY_TEMPLATE,
     )
+
+
+@app.get("/servers/<int:server_id>/dashboard-data")
+def dashboard_data(server_id: int):
+    server = fetch_server(server_id)
+    if not server:
+        return jsonify(error=f"Server {server_id} not found."), 404
+
+    try:
+        manager = make_manager(server)
+        manager.connect()
+        clients, _, mail_targets = load_clients_with_mail(manager, server)
+        serialized_clients = []
+        for client in clients:
+            email = (client.raw or {}).get("email") or {}
+            serialized_clients.append(
+                {
+                    "client_id": client.client_id,
+                    "name": client.name,
+                    "ip": client.ip,
+                    "vpn_link": client.vpn_link,
+                    "email": email.get("email_address", ""),
+                    "email_url": url_for(
+                        "save_email", server_id=server_id, client_id=client.client_id
+                    ),
+                    "delete_url": url_for(
+                        "delete_client", server_id=server_id, client_id=client.client_id
+                    ),
+                }
+            )
+        return jsonify(
+            clients=serialized_clients,
+            mail_targets=mail_targets,
+        )
+    except Exception as exc:
+        return jsonify(error=f"{server['name']}: {exc}"), 502
 
 
 @app.post("/servers/add")
