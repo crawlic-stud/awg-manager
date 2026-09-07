@@ -202,7 +202,7 @@
               <div class="mail-recipients">
                 <div class="recipient-head">
                   <label class="recipient-select-all">
-                    <input type="checkbox" id="select-all-recipients" checked />
+                    <input type="checkbox" id="select-all-recipients" />
                     <strong>Recipients</strong>
                   </label>
                   <span id="eligible-mail-count">{{ eligible_mail_count }} available</span>
@@ -214,7 +214,6 @@
                       type="checkbox"
                       name="recipient_ids"
                       value="{{ item.client_id }}"
-                      checked
                       data-email="{{ item.email_address }}"
                       data-name="{{ item.name }}"
                       data-vpn-link="{{ item.vpn_link }}"
@@ -459,7 +458,7 @@
         recipientList.innerHTML = targets.length
           ? targets.map((item) => `
             <label class="recipient-item">
-              <input type="checkbox" name="recipient_ids" value="${escapeHtml(item.client_id)}" checked data-email="${escapeHtml(item.email_address)}" data-name="${escapeHtml(item.name)}" data-vpn-link="${escapeHtml(item.vpn_link)}">
+              <input type="checkbox" name="recipient_ids" value="${escapeHtml(item.client_id)}" data-email="${escapeHtml(item.email_address)}" data-name="${escapeHtml(item.name)}" data-vpn-link="${escapeHtml(item.vpn_link)}">
               <div class="recipient-meta">
                 <strong>${escapeHtml(item.name)}</strong>
                 <span>${escapeHtml(item.email_address)}</span>
