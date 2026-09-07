@@ -1,5 +1,6 @@
 paramiko==3.5.1
 cryptography==44.0.2
 flask==3.0.3
+gunicorn==23.0.0
 python-dotenv==1.0.1
 resend==2.43.0

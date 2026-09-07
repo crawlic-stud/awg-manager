@@ -22,6 +22,23 @@ docker compose up --build
 
 Открой `http://localhost:8000`.
 
+Для production-запуска через Nginx используй отдельный compose-файл:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+В production-пресете приложение запускается через Gunicorn и доступно только на `127.0.0.1:8888`, чтобы внешний трафик принимал Nginx. В этом режиме автоматически включаются Secure-cookie и доверие к заголовкам `X-Forwarded-*` от Nginx.
+
+Nginx должен передавать приложению схему запроса:
+
+```nginx
+proxy_set_header Host $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+```
+
 Для входа используется пароль из `AUTH_PASSWORD` в `.env`. После успешного входа авторизация хранится в cookie-сессии 24 часа. Все маршруты dashboard требуют авторизации.
 
 Если нужно проверить только CLI:

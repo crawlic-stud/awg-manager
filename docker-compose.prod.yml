@@ -1,0 +1,14 @@
+services:
+  awg-manager:
+    build: .
+    env_file:
+      - .env
+    environment:
+      SESSION_COOKIE_SECURE: "1"
+      TRUST_PROXY: "1"
+    ports:
+      - "127.0.0.1:8888:8888"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    command: gunicorn --workers 2 --threads 4 --timeout 300 --bind 0.0.0.0:8888 webapp:app

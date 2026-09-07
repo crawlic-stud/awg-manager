@@ -10,6 +10,7 @@ from io import StringIO
 
 from dotenv import load_dotenv
 from flask import Flask, flash, redirect, render_template, request, session, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from mail import DEFAULT_EMAIL_BODY_TEMPLATE, DEFAULT_EMAIL_SUBJECT_TEMPLATE, send_email
 from wg_manager import WGManager
@@ -390,7 +391,11 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(hours=24),
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.getenv("SESSION_COOKIE_SECURE", "0").lower()
+    in {"1", "true", "yes"},
 )
+if os.getenv("TRUST_PROXY", "0").lower() in {"1", "true", "yes"}:
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 
 @app.route("/login", methods=["GET", "POST"])
