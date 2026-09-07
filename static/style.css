@@ -48,6 +48,12 @@ body {
 
 h1, h2, p { margin: 0; }
 h1 { font-size: clamp(32px, 4vw, 52px); line-height: 1.02; }
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
 .stats { display: flex; gap: 12px; flex-wrap: wrap; }
 .stat {
   min-width: 150px;
@@ -74,6 +80,32 @@ h1 { font-size: clamp(32px, 4vw, 52px); line-height: 1.02; }
   border-radius: 24px;
   padding: 20px;
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.28);
+}
+.server-modal {
+  width: min(1100px, calc(100% - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 24px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+.server-modal::backdrop {
+  background: rgba(1, 7, 16, 0.72);
+  backdrop-filter: blur(4px);
+}
+.server-modal .servers-panel {
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
 }
 .panel-head { margin-bottom: 18px; }
 .panel-head p { color: var(--muted); margin-top: 6px; }
@@ -475,6 +507,7 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.02); }
 
 @media (max-width: 900px) {
   .topbar { flex-direction: column; align-items: start; }
+  .title-row { align-items: flex-start; }
   .server-form { grid-template-columns: 1fr; }
   .server-form .field,
   .server-form .save-btn { grid-column: auto; }
