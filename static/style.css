@@ -534,6 +534,14 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.02); }
   flex-wrap: wrap;
   align-items: center;
 }
+.attachment-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
 
 .ghost-btn {
   display: inline-flex;

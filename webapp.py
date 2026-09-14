@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import hmac
 import os
+import re
 import sqlite3
 from contextlib import closing
 from datetime import datetime, timedelta
@@ -13,7 +14,7 @@ from flask import Flask, flash, jsonify, redirect, render_template, request, ses
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from mail import DEFAULT_EMAIL_BODY_TEMPLATE, DEFAULT_EMAIL_SUBJECT_TEMPLATE, send_email
-from wg_manager import WGManager
+from wg_manager import WGManager, temporary_config_file
 
 load_dotenv()
 
@@ -664,14 +665,24 @@ def send_mail_route(server_id: int):
         failed: list[str] = []
         for recipient in recipients:
             try:
-                send_email(
-                    to=recipient["email_address"],
-                    vpn_link=recipient["vpn_link"],
-                    client_name=recipient["name"],
-                    server_name=server["name"],
-                    subject_template=subject_template,
-                    body_template=body_template,
-                )
+                email_kwargs = {
+                    "to": recipient["email_address"],
+                    "vpn_link": recipient["vpn_link"],
+                    "client_name": recipient["name"],
+                    "server_name": server["name"],
+                    "subject_template": subject_template,
+                    "body_template": body_template,
+                }
+                if request.form.get("attach_config") == "1":
+                    config_text = manager.get_client_config(recipient["client_id"])
+                    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", recipient["name"]).strip("._")
+                    attachment_name = f"{safe_name or recipient['client_id'][:12]}.conf"
+                    with temporary_config_file(config_text) as temp_file:
+                        email_kwargs["attachment_filename"] = attachment_name
+                        email_kwargs["attachment_content"] = temp_file.read()
+                        send_email(**email_kwargs)
+                else:
+                    send_email(**email_kwargs)
                 sent += 1
             except Exception as exc:
                 failed.append(f"{recipient['name']}: {exc}")

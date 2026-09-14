@@ -7,11 +7,13 @@ import json
 import re
 import shlex
 import struct
+import tempfile
 import zlib
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import BinaryIO, Iterator, Optional
 
 import paramiko
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
@@ -67,6 +69,16 @@ def generate_wg_keypair() -> tuple[str, str]:
 
 def encode_vpn_link(config_text: str) -> str:
     return f"vpn://{base64.urlsafe_b64encode(config_text.strip().encode('utf-8')).decode('utf-8').rstrip('=')}"
+
+
+@contextmanager
+def temporary_config_file(config_text: str) -> Iterator[BinaryIO]:
+    """Yield a temporary .conf file and remove it when the context exits."""
+    with tempfile.NamedTemporaryFile(mode="w+b", suffix=".conf", prefix="awg-client-") as temp_file:
+        temp_file.write(config_text.encode("utf-8"))
+        temp_file.flush()
+        temp_file.seek(0)
+        yield temp_file
 
 
 def parse_wg_config(config_text: str) -> dict[str, str]:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import html
 import os
 import re
@@ -80,6 +81,8 @@ def send_email(
     server_name: str | None = None,
     subject_template: str = DEFAULT_EMAIL_SUBJECT_TEMPLATE,
     body_template: str = DEFAULT_EMAIL_BODY_TEMPLATE,
+    attachment_filename: str | None = None,
+    attachment_content: bytes | None = None,
 ) -> Any:
     api_key = os.getenv("RESEND_API_KEY") or ""
     sender = os.getenv("EMAIL") or ""
@@ -107,4 +110,13 @@ def send_email(
         "text": body_text,
         "html": body_html,
     }
+    if attachment_content is not None:
+        if not attachment_filename:
+            raise ValueError("attachment_filename is required when attachment_content is set")
+        params["attachments"] = [
+            {
+                "filename": attachment_filename,
+                "content": base64.b64encode(attachment_content).decode("ascii"),
+            }
+        ]
     return Emails.send(params)
