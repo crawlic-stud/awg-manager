@@ -46,6 +46,13 @@
               Close
             </button>
           </div>
+          <div class="server-health-alert" id="server-modal-status" hidden>
+            <strong id="server-modal-status-title">Server unavailable</strong>
+            <span id="server-modal-status-message"></span>
+            <button type="button" class="ghost-btn" id="server-modal-retry">
+              Try again
+            </button>
+          </div>
 
           <form
             class="server-form"
@@ -86,12 +93,18 @@
             {% for server in servers %}
             <article
               class="server-card {% if selected_server and server.id == selected_server_id %}active{% endif %}"
+              data-server-id="{{ server.id }}"
             >
               <div class="server-meta">
                 <strong>{{ server.name }}</strong>
                 <span
                   >{{ server.login }}@{{ server.host }}:{{ server.port }}</span
                 >
+                <span
+                  class="server-status {% if server.reachable == 0 %}unreachable{% elif server.reachable == 1 %}reachable{% endif %}"
+                  data-server-status="{{ server.id }}"
+                  {% if server.reachable is none %}hidden{% endif %}
+                >{% if server.reachable == 0 %}Not reachable{% else %}Available{% endif %}</span>
               </div>
               <div class="server-actions">
                 <a
@@ -159,7 +172,7 @@
 
       <main
         class="panel"
-        {% if selected_server %}data-dashboard-url="{{ url_for('dashboard_data', server_id=selected_server_id) }}"{% endif %}
+        {% if selected_server %}data-dashboard-url="{{ url_for('dashboard_data', server_id=selected_server_id) }}" data-server-id="{{ selected_server_id }}"{% endif %}
       >
         {% if selected_server %}
         <section class="mail-panel">
@@ -410,6 +423,10 @@
       const loadingOverlay = document.getElementById("loading-overlay");
       const loadingMessage = document.getElementById("loading-message");
       const loadingRetry = document.getElementById("loading-retry");
+      const serverModalStatus = document.getElementById("server-modal-status");
+      const serverModalStatusMessage = document.getElementById("server-modal-status-message");
+      const serverModalRetry = document.getElementById("server-modal-retry");
+      const selectedServerId = document.querySelector("main[data-server-id]")?.dataset.serverId;
 
       const showLoading = (message = "Loading…") => {
         if (!loadingOverlay) return;
@@ -420,6 +437,26 @@
 
       const hideLoading = () => {
         if (loadingOverlay) loadingOverlay.classList.remove("visible");
+      };
+
+      const setServerStatus = (reachable, message = "") => {
+        if (!selectedServerId) return;
+        const status = document.querySelector(`[data-server-status="${selectedServerId}"]`);
+        if (!status) return;
+        status.hidden = false;
+        status.textContent = reachable ? "Available" : "Not reachable";
+        status.classList.toggle("reachable", reachable);
+        status.classList.toggle("unreachable", !reachable);
+      };
+
+      const showServerUnavailable = (message) => {
+        setServerStatus(false, message);
+        if (serverModalStatusMessage) {
+          serverModalStatusMessage.textContent = message || "SSH connection timed out.";
+        }
+        serverModalStatus?.removeAttribute("hidden");
+        hideLoading();
+        if (serverModal && !serverModal.open) serverModal.showModal();
       };
 
       const renderClients = (clients) => {
@@ -553,17 +590,24 @@
           if (total) total.textContent = String((data.clients || []).length);
           const linked = document.querySelectorAll(".stat strong")[1];
           if (linked) linked.textContent = String((data.clients || []).filter((client) => client.email).length);
+          setServerStatus(true);
+          serverModalStatus?.setAttribute("hidden", "");
           hideLoading();
           syncPreview();
           syncSelectAll();
         } catch (error) {
           loadingMessage.textContent = error.message;
           loadingOverlay?.querySelector(".loading-card span")?.replaceChildren("Reload the page to try again");
-          if (loadingRetry) loadingRetry.hidden = false;
+          showServerUnavailable(error.message);
         }
       };
 
       loadingRetry?.addEventListener("click", loadDashboard);
+      serverModalRetry?.addEventListener("click", () => {
+        serverModalStatus?.setAttribute("hidden", "");
+        if (serverModal?.open) serverModal.close();
+        loadDashboard();
+      });
       document.querySelectorAll('a[href^="/servers/"]').forEach((link) => {
         link.addEventListener("click", () => showLoading("Opening server…"));
       });

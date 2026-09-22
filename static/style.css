@@ -249,6 +249,37 @@ h1 { font-size: clamp(32px, 4vw, 52px); line-height: 1.02; }
   color: var(--muted);
   font-size: 12px;
 }
+.server-meta .server-status {
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+.server-status.reachable {
+  background: rgba(47, 209, 138, 0.12);
+  color: #bff8dd;
+}
+.server-status.unreachable {
+  background: rgba(255, 109, 109, 0.14);
+  color: #ffd0d0;
+}
+.server-health-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 109, 109, 0.35);
+  border-radius: 12px;
+  background: rgba(255, 109, 109, 0.1);
+  color: #ffd0d0;
+}
+.server-health-alert span {
+  flex: 1 1 240px;
+  color: var(--muted);
+  font-size: 13px;
+}
 
 .server-actions {
   display: flex;

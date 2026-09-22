@@ -55,6 +55,9 @@ def create_servers_table(db: sqlite3.Connection) -> None:
             login TEXT NOT NULL,
             password TEXT NOT NULL DEFAULT '',
             active INTEGER NOT NULL DEFAULT 0,
+            reachable INTEGER,
+            last_checked_at TEXT,
+            last_error TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
@@ -133,6 +136,9 @@ def init_db() -> None:
             "login",
             "password",
             "active",
+            "reachable",
+            "last_checked_at",
+            "last_error",
             "created_at",
             "updated_at",
         }:
@@ -145,12 +151,22 @@ def init_db() -> None:
             source_login = "login" if "login" in old_columns else "''"
             source_password = "password" if "password" in old_columns else "''"
             source_active = "active" if "active" in old_columns else "0"
+            source_reachable = "reachable" if "reachable" in old_columns else "NULL"
+            source_last_checked = "last_checked_at" if "last_checked_at" in old_columns else "NULL"
+            source_last_error = "last_error" if "last_error" in old_columns else "NULL"
             source_created = "created_at" if "created_at" in old_columns else f"'{now_iso()}'"
             source_updated = "updated_at" if "updated_at" in old_columns else f"'{now_iso()}'"
             db.execute(
                 f"""
-                INSERT INTO servers (name, host, port, login, password, active, created_at, updated_at)
-                SELECT {source_name}, {source_host}, {source_port}, {source_login}, {source_password}, {source_active}, {source_created}, {source_updated}
+                INSERT INTO servers (
+                    name, host, port, login, password, active, reachable,
+                    last_checked_at, last_error, created_at, updated_at
+                )
+                SELECT
+                    {source_name}, {source_host}, {source_port}, {source_login},
+                    {source_password}, {source_active}, {source_reachable},
+                    {source_last_checked}, {source_last_error},
+                    {source_created}, {source_updated}
                 FROM servers_old
                 """
             )
@@ -208,6 +224,19 @@ def fetch_servers() -> list[sqlite3.Row]:
 def fetch_server(server_id: int) -> sqlite3.Row | None:
     with closing(get_db()) as db:
         return db.execute("SELECT * FROM servers WHERE id = ?", (server_id,)).fetchone()
+
+
+def update_server_health(server_id: int, reachable: bool, error: str = "") -> None:
+    with closing(get_db()) as db:
+        db.execute(
+            """
+            UPDATE servers
+            SET reachable = ?, last_checked_at = ?, last_error = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (1 if reachable else 0, now_iso(), error[:500], now_iso(), server_id),
+        )
+        db.commit()
 
 
 def select_server(servers: list[sqlite3.Row], requested_id: int | None) -> sqlite3.Row | None:
@@ -496,11 +525,13 @@ def dashboard_data(server_id: int):
                     ),
                 }
             )
+        update_server_health(server_id, True)
         return jsonify(
             clients=serialized_clients,
             mail_targets=mail_targets,
         )
     except Exception as exc:
+        update_server_health(server_id, False, str(exc))
         return jsonify(error=f"{server['name']}: {exc}"), 502
 
 
@@ -553,8 +584,10 @@ def check_server(server_id: int):
     try:
         manager = make_manager(server)
         manager.connect()
+        update_server_health(server_id, True)
         flash(f"{server['name']} is available.", "success")
     except Exception as exc:
+        update_server_health(server_id, False, str(exc))
         flash(f"{server['name']} unavailable: {exc}", "error")
     return redirect(url_for("index", server_id=server_id))
 
